@@ -1,22 +1,11 @@
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
-import time
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 import re
-import pandas as pd
-
-
-# def parse_selenium(url):
-#     driver = webdriver.Chrome()
-#     driver.maximize_window()
-#     driver.get(url)
-
-#     time.sleep(5)
-#     content = driver.page_source.encode('utf-8').strip()
-#     print(content)
-#     parse_soup(url, content)
-#     driver.quit()
-
+import time
 
 def format_text(text, new_lines=True):
     '''
@@ -61,9 +50,9 @@ def get_description(url):
     return description
 
 
-def parse_soup(response):
+def parse_page(response):
     '''
-    Парсер сайта. На выходе DataFrame со всем содержимым.
+    Парсер одной страницы. На выходе DataFrame со всем содержимым.
     '''
     soup = BeautifulSoup(response.text, "html.parser")
     df_list = []
@@ -89,8 +78,10 @@ def parse_soup(response):
     df_data.columns = ['Name', 'Price', 'Description']
     return df_data
 
-
-if __name__ == '__main__':
+def parse():
+    '''
+    Парсер с пагинацией
+    '''
     url = "https://mi-shop.com/ru/catalog/smartphones/"
     response = requests.get(url)
     df_main_list = []
@@ -98,16 +89,50 @@ if __name__ == '__main__':
     page = 1
     url_page = url
     while response.status_code == 200:
-        df = parse_soup(response)
+        df = parse_page(response)
         df_main_list.append(df)
         page += 1
         url_page = url + f"page/{page}/"
         response = requests.get(url_page)
-        # не все страницы, а то долго ждатб :)
-        if page == 3:
-            break
-
     df_main = pd.concat(df_main_list)
     df_main.to_csv('out.csv', index=False)
 
+
+def find_selenium(driver, id, key):
+    '''
+    Найти поле для ввода по id и заполнить его содержимое ключом.
+    '''
+    input = driver.find_element("id", id)
+    input.clear()
+    input.send_keys(key)
+
+
+def authorize():
+    '''
+    Авторизация через Selenium.
+    '''
     url = 'https://mi-shop.com/ru/personal/?login=yes&backurl=%2Fru%2Fcatalog%2Fsmartphones%2Fredmi-9c-nfc-4-128gb-fioletovyy%2F'
+    # to supress the error messages/logs
+    options = webdriver.ChromeOptions()
+    options.add_experimental_option('excludeSwitches', ['enable-logging'])
+    driver = webdriver.Chrome(options=options, service=Service(ChromeDriverManager().install()))
+    driver.get(url)
+    # Данные для ввода
+    email = "amogus"
+    password = "imposter"
+    # Заполнение полей
+    find_selenium(driver, "auth-default-email", email)
+    find_selenium(driver, "auth-default-password", password)
+    # Кнопка ВОЙТИ
+    enter_button = driver.find_element("id", "auth-default-submit")
+    enter_button.click()
+    # Подождать ответа 
+    time.sleep(1)
+    # Сохранить скриншот
+    driver.save_screenshot("auth.png")
+    # Закрыть
+    driver.quit()
+
+if __name__ == '__main__':
+    parse()
+    authorize()
