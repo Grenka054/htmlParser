@@ -9,19 +9,19 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
 
-def format_text(text, new_lines=True):
+def format_text(text: str, new_lines: bool = True):
     """
     Убрать из текста (если нужно) переносы строк и повторяющиеся пробелы.
     У mi-shop.com они повсюду.
     """
     if new_lines:
-        text = text.replace('\n', '')
-        text = text.replace('\r', '')
-    text = re.sub(' +', ' ', text)
+        text = re.sub(' +', ' ', text.replace('\r', '').replace('\n', ''))
+    else:
+        text = re.sub(' +', ' ', text)
     return text
 
 
-def find_data(soup, tag, class_, href=False):
+def find_data(soup: BeautifulSoup, tag: str, class_: str, href: bool = False) -> DataFrame:
     """
     Получить DataFrame с отформатриованным содержимым или ссылками, найденными по тегу и классу.
     """
@@ -31,29 +31,27 @@ def find_data(soup, tag, class_, href=False):
         if href:
             text = good.get('href')
         else:
-            text = good.text
-            if format:
-                text = format_text(text)
+            text = format_text(good.text)
         lst.append(text)
 
     return DataFrame(lst)
 
 
-def get_description(url):
+def get_description(url: str) -> str:
     """
     Получить описание о товаре в формате строки.
     """
     response = requests.get('https://mi-shop.com' + url)
     soup = BeautifulSoup(response.text, "html.parser")
-    df1 = find_data(soup, 'td', 'detail__table-one')
-    df2 = find_data(soup, 'td', 'detail__table-two')
-    description_from_df = (concat([df1, df2], axis=1, join="inner")).to_string(
-        header=False)
+    df_table = [find_data(soup, 'td', 'detail__table-one'),
+                find_data(soup, 'td', 'detail__table-two')]
+    description_from_df = (concat(df_table, axis=1, join="inner")).to_string(
+        header=False, index=False)
     description = format_text(description_from_df, new_lines=False)
     return description
 
 
-def parse_page(response):
+def parse_page(response: requests) -> DataFrame:
     """
     Парсер одной страницы. На выходе DataFrame со всем содержимым.
     """
@@ -102,7 +100,7 @@ def parse():
     df_main.to_csv('out.csv', index=False)
 
 
-def find_selenium(driver, id, key):
+def find_selenium(driver: webdriver, id: str, key: str):
     """
     Найти поле для ввода по id и заполнить его содержимое ключом.
     """
@@ -130,8 +128,7 @@ def authorize():
         find_selenium(driver, "auth-default-email", email)
         find_selenium(driver, "auth-default-password", password)
         # Кнопка ВОЙТИ
-        enter_button = driver.find_element("id", "auth-default-submit")
-        enter_button.click()
+        driver.find_element("id", "auth-default-submit").click()
         # Подождать ответа
         sleep(1)
         # Сохранить скриншот
